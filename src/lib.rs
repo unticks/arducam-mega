@@ -325,13 +325,13 @@ where
             .windows(2)
             .enumerate()
             .filter_map(|(i, p)| match p {
-                [0xff, 0xd9] => Some(i),
+                [0xff, 0xd9] => Some(i + 2),
                 _ => None,
             })
             .last()
-            .unwrap();
+            .unwrap_or(length);
 
-        Ok(marker + 2)
+        Ok(marker)
     }
 
     fn set_auto_camera_control(
