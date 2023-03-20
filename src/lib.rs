@@ -131,7 +131,7 @@ enum ArduchipCommand {
     Start = 0x02,
 }
 
-/// The white balance mode the camera should use.
+/// The white balance mode the camera should use
 ///
 /// Whether you can use a static value or not will depend on the conditions in which your camera
 /// operates. For most consistent results, it is recommended to use a specific mode, which will
@@ -146,7 +146,7 @@ pub enum WhiteBalanceMode {
     Home = 0x04,
 }
 
-/// The main ArducamMega struct.
+/// The main ArducamMega struct
 ///
 /// This struct is the driver's main entrypoint. By providing it with a configured SPI device and
 /// Delay implementation, this driver will be able to configure the Arducam Mega camera, take
@@ -196,6 +196,10 @@ where
         Ok(())
     }
 
+    /// Resets the camera sensor sensor
+    ///
+    /// This command sends a reset command to the camera. The Arducam SDK uses this after
+    /// initialisation to ensure that the sensor is in a known-good state.
     pub fn reset(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::SensorReset, SENSOR_RESET_ENABLE)?;
         self.wait_idle()
@@ -208,17 +212,18 @@ where
         Ok(id)
     }
 
-    /// Sets the auto-focus of the camera.
+    /// Sets the auto-focus of the camera
     ///
     /// It is not clear how this feature should be used. As of current testing, only sending `0x00`
-    /// actually produces successful captures. Sending `0x01` does not work. More testing welcome.
+    /// actually produces successful captures. Sending `0x01` makes the camera produce invalid
+    /// image data. More testing welcome.
     #[cfg(feature = "5mp")]
     pub fn set_auto_focus(&mut self, value: u8) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::AutoFocus, value)?;
         self.wait_idle()
     }
 
-    /// Sets the capture format of the camera.
+    /// Sets the capture format of the camera
     ///
     /// This function allows you to control what format the camera captures pictures in.
     /// `CaptureFormat::Jpeg` provides a good mix between image size and quality, and is the
@@ -231,7 +236,7 @@ where
         self.wait_idle()
     }
 
-    /// Sets the capture resolution of the camera.
+    /// Sets the capture resolution of the camera
     ///
     /// This function allows you to control the resolution of the pictures that are captured by the
     /// camera. Both the 3MP and 5MP cameras have two different default resolutions. See
@@ -247,6 +252,10 @@ where
         self.wait_idle()
     }
 
+    /// Sets the camera's debug device address
+    ///
+    /// The Arducam SDK uses this command as part of the camera initialisation with the address
+    /// `0x78`, however this does not appear to be necessary for the camera to function properly.
     pub fn set_debug_device_address(
         &mut self,
         addr: u8,
@@ -255,18 +264,32 @@ where
         self.wait_idle()
     }
 
+    /// Empties the camera's FIFO buffer
+    ///
+    /// This command empties the contents of the camera's FIFO buffer. This is used as part of the
+    /// [`capture()`](ArducamMega::capture) function.
     fn clear_fifo(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::ArduchipFifo, ArduchipCommand::Clear as u8)
     }
 
-    fn capture_finished(&mut self) -> Result<bool, Error<SPI::Error, Delay::Error>> {
+    /// Checks whether the sensor has finished capturing an image
+    ///
+    /// This command reads a register in the camera to check if the sensor has finished taking a
+    /// picture. You should not attempt to read the FIFO buffer length nor read any FIFO buffer
+    /// data prior to this returning `true`.
+    pub fn capture_finished(&mut self) -> Result<bool, Error<SPI::Error, Delay::Error>> {
         let sensor_state = self.read_reg(RegisterAddress::SensorState)?;
         Ok((sensor_state & CAPTURE_FINISHED_MASK) != 0)
     }
 
+    /// Takes a picture using the currently-configured settings
+    ///
+    /// This command starts by emptying the camera's FIFO buffer and subsequently tells the sensor
+    /// to capture an image. The image will be captured using the currently-configured settings
+    /// (white balance, gain, exposure, colour filters, etc). This command blocks until the sensor
+    /// has finished capturing the image.
     pub fn capture(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
-        self.clear_fifo()?;
-        self.write_reg(RegisterAddress::ArduchipFifo, ArduchipCommand::Start as u8)?;
+        self.capture_noblock()?;
 
         while !self.capture_finished()? {
             self.delay.delay_us(500u32).map_err(Error::Delay)?;
@@ -275,6 +298,19 @@ where
         Ok(())
     }
 
+    /// Non-blocking version of [`capture()`](ArducamMega::capture)
+    pub fn capture_noblock(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.clear_fifo()?;
+        self.write_reg(RegisterAddress::ArduchipFifo, ArduchipCommand::Start as u8)?;
+
+        Ok(())
+    }
+
+    /// Reads the size of the camera's FIFO buffer length
+    ///
+    /// This function reads out the size of the FIFO buffer length. This (roughly) represents the
+    /// size of the picture. It appears that in some cases, the reported buffer is larger than the
+    /// actual picture data.
     pub fn read_fifo_length(&mut self) -> Result<usize, Error<SPI::Error, Delay::Error>> {
         let size1 = self.read_reg(RegisterAddress::FifoSize1)? as usize;
         let size2 = self.read_reg(RegisterAddress::FifoSize2)? as usize;
@@ -285,6 +321,16 @@ where
         Ok(length)
     }
 
+    /// Reads a single byte out of the FIFO buffer
+    ///
+    /// Returns the first byte out of the FIFO buffer. After it has been read, the FIFO buffer will
+    /// advance and the byte will be gone from the camera. In theory, calling this function
+    /// [`fifo_length`](ArducamMega::read_fifo_length) times should provide you with the full
+    /// picture data.
+    ///
+    /// Reading out the entire image data like this will be relatively slow, as each byte transfer
+    /// will require an SPI transaction to be setup and ended. For faster transfers, please see
+    /// [`read_fifo_full`](ArducamMega::read_fifo_full).
     pub fn read_fifo_byte(&mut self) -> Result<u8, Error<SPI::Error, Delay::Error>> {
         let output: [u8; 1] = [FIFO_READ_SINGLE];
         let mut data: [u8; 3] = [0; 3];
@@ -295,6 +341,12 @@ where
         Ok(data[2])
     }
 
+    /// Reads out the entire FIFO buffer
+    ///
+    /// Reads out the camera's entire FIFO buffer into `data`. `data` must be large enough to
+    /// accomodate the entire data transfer, or some data loss will occur. This function currently
+    /// attemps to find the end-of-file JPEG marker in the byte-stream and returns its location.
+    /// This is not currently tested for other data formats (YUV, RGB).
     pub fn read_fifo_full(
         &mut self,
         data: &mut [u8],
@@ -346,31 +398,43 @@ where
         self.wait_idle()
     }
 
+    /// Enables the camera's auto white balance
+    ///
+    /// **Note**: This appears to not work on the ArducamMega 5MP, where pictures are severely
+    /// green-tinted when using AWB.
     #[inline]
     pub fn enable_auto_white_balance(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.set_auto_camera_control(CameraControl::WhiteBalance, ControlValue::Enable)
     }
 
+    /// Disables the camera's auto white balance
+    ///
+    /// This function is automatically called by
+    /// [`set_white_balance_mode()`](ArducamMega::set_white_balance_mode).
     #[inline]
     pub fn disable_auto_white_balance(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.set_auto_camera_control(CameraControl::WhiteBalance, ControlValue::Disable)
     }
 
+    /// Enables the camera's automatic gain adjustment
     #[inline]
     pub fn enable_auto_iso(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.set_auto_camera_control(CameraControl::Gain, ControlValue::Enable)
     }
 
+    /// Disables the camera's automatic gain adjustment
     #[inline]
     pub fn disable_auto_iso(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.set_auto_camera_control(CameraControl::Gain, ControlValue::Disable)
     }
 
+    /// Enables the camera's automatic exposure control
     #[inline]
     pub fn enable_auto_exposure(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.set_auto_camera_control(CameraControl::Exposure, ControlValue::Enable)
     }
 
+    /// Disables the camera's automatic exposure control
     #[inline]
     pub fn disable_auto_exposure(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.set_auto_camera_control(CameraControl::Exposure, ControlValue::Disable)
