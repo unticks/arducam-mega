@@ -65,6 +65,7 @@ enum CameraControl {
 #[derive(Debug, Clone)]
 #[repr(u8)]
 enum RegisterAddress {
+    Power = 0x02,
     ArduchipFifo = 0x04,
     SensorReset = 0x07,
     DebugDeviceAddress = 0x0a,
@@ -79,6 +80,13 @@ enum RegisterAddress {
     FifoSize1 = 0x45,
     FifoSize2 = 0x46,
     FifoSize3 = 0x47,
+}
+
+#[derive(Debug, Clone)]
+#[repr(u8)]
+enum PowerMode {
+    LowPower = 0x07,
+    Normal = 0x05,
 }
 
 #[derive(Debug, Clone)]
@@ -487,6 +495,23 @@ where
         self.disable_auto_white_balance()?;
         self.write_reg(RegisterAddress::WhiteBalanceMode, mode as u8)?;
         self.wait_idle()
+    }
+
+    #[inline]
+    fn set_power_mode(&mut self, mode: PowerMode) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.write_reg(RegisterAddress::Power, mode as u8)
+    }
+
+    /// Turns on the camera's low power mode
+    #[inline]
+    pub fn enable_low_power_mode(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.set_power_mode(PowerMode::LowPower)
+    }
+
+    /// Turns off the camera's low power mode
+    #[inline]
+    pub fn disable_low_power_mode(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.set_power_mode(PowerMode::Normal)
     }
 }
 
@@ -999,6 +1024,32 @@ mod tests {
         let mut spi = spi::Mock::new(&expectations);
         let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
         c.set_white_balance_mode(WhiteBalanceMode::Home).unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn enable_low_power_mode_writes_a_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0x82, 0x07]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.enable_low_power_mode().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn disable_low_power_mode_writes_a_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0x82, 0x05]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.disable_low_power_mode().unwrap();
         spi.done();
     }
 }
