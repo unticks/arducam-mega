@@ -77,6 +77,8 @@ enum RegisterAddress {
     Exposure = 0x25,
     WhiteBalanceMode = 0x26,
     ColorEffect = 0x27,
+    #[cfg(feature = "3mp")]
+    Sharpness = 0x28,
     #[cfg(feature = "5mp")]
     AutoFocus = 0x29,
     GainExposureWhiteBalance = 0x2a,
@@ -87,7 +89,24 @@ enum RegisterAddress {
     FifoSize3 = 0x47,
 }
 
-/// Values to set the exposure of the camera
+/// Values to set the sharpness of the camera
+#[cfg(feature = "3mp")]
+#[derive(Debug, Clone, Default)]
+#[repr(u8)]
+pub enum SharpnessLevel {
+    #[default]
+    Auto = 0x00,
+    One = 0x01,
+    Two = 0x02,
+    Three = 0x03,
+    Four = 0x04,
+    Five = 0x05,
+    Six = 0x06,
+    Seven = 0x07,
+    Eight = 0x08,
+}
+
+/// Values to set the color effect of the camera
 #[derive(Debug, Clone, Default)]
 #[repr(u8)]
 pub enum ColorEffect {
@@ -635,6 +654,16 @@ where
         effect: ColorEffect,
     ) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::ColorEffect, effect as u8)?;
+        self.wait_idle()
+    }
+
+    /// Sets the camera's color effect
+    #[cfg(feature = "3mp")]
+    pub fn set_sharpness(
+        &mut self,
+        level: SharpnessLevel,
+    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.write_reg(RegisterAddress::Sharpness, level as u8)?;
         self.wait_idle()
     }
 }
@@ -1259,6 +1288,24 @@ mod tests {
         let mut spi = spi::Mock::new(&expectations);
         let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
         c.set_color_effect(ColorEffect::BlackWhite).unwrap();
+        spi.done();
+    }
+
+    #[cfg(feature = "3mp")]
+    #[test]
+    fn set_sharpness_writes_a_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xa8, 0x03]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_sharpness(SharpnessLevel::Three).unwrap();
         spi.done();
     }
 }
