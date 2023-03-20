@@ -65,12 +65,20 @@ enum CameraControl {
 #[derive(Debug, Clone)]
 #[repr(u8)]
 enum RegisterAddress {
+    Power = 0x02,
     ArduchipFifo = 0x04,
     SensorReset = 0x07,
     DebugDeviceAddress = 0x0a,
     CaptureFormat = 0x20,
     CaptureResolution = 0x21,
+    Brightness = 0x22,
+    Contrast = 0x23,
+    Saturation = 0x24,
+    Exposure = 0x25,
     WhiteBalanceMode = 0x26,
+    ColorEffect = 0x27,
+    #[cfg(feature = "3mp")]
+    Sharpness = 0x28,
     #[cfg(feature = "5mp")]
     AutoFocus = 0x29,
     GainExposureWhiteBalance = 0x2a,
@@ -79,6 +87,104 @@ enum RegisterAddress {
     FifoSize1 = 0x45,
     FifoSize2 = 0x46,
     FifoSize3 = 0x47,
+}
+
+/// Values to set the sharpness of the camera
+#[cfg(feature = "3mp")]
+#[derive(Debug, Clone, Default)]
+#[repr(u8)]
+pub enum SharpnessLevel {
+    #[default]
+    Auto = 0x00,
+    One = 0x01,
+    Two = 0x02,
+    Three = 0x03,
+    Four = 0x04,
+    Five = 0x05,
+    Six = 0x06,
+    Seven = 0x07,
+    Eight = 0x08,
+}
+
+/// Values to set the color effect of the camera
+#[derive(Debug, Clone, Default)]
+#[repr(u8)]
+pub enum ColorEffect {
+    #[default]
+    None = 0x00,
+    Blueish = 0x01,
+    Redish = 0x02,
+    BlackWhite = 0x03,
+    Sepia = 0x04,
+    Negative = 0x05,
+    GrassGreen = 0x06,
+    OverExposure = 0x07,
+    Solarize = 0x08,
+}
+
+/// Values to set the exposure of the camera
+#[derive(Debug, Clone, Default)]
+#[repr(u8)]
+pub enum ExposureLevel {
+    #[default]
+    Default = 0x00,
+    PlusOne = 0x01,
+    MinusOne = 0x02,
+    PlusTwo = 0x03,
+    MinusTwo = 0x04,
+    PlusThree = 0x05,
+    MinusThree = 0x06,
+}
+
+/// Values to set the saturation of the camera
+#[derive(Debug, Clone, Default)]
+#[repr(u8)]
+pub enum SaturationLevel {
+    #[default]
+    Default = 0x00,
+    PlusOne = 0x01,
+    MinusOne = 0x02,
+    PlusTwo = 0x03,
+    MinusTwo = 0x04,
+    PlusThree = 0x05,
+    MinusThree = 0x06,
+}
+
+/// Values to set the contrast of the camera
+#[derive(Debug, Clone, Default)]
+#[repr(u8)]
+pub enum ContrastLevel {
+    #[default]
+    Default = 0x00,
+    PlusOne = 0x01,
+    MinusOne = 0x02,
+    PlusTwo = 0x03,
+    MinusTwo = 0x04,
+    PlusThree = 0x05,
+    MinusThree = 0x06,
+}
+
+/// Values to set the brightness bias of the camera
+#[derive(Debug, Clone, Default)]
+#[repr(u8)]
+pub enum BrightnessLevel {
+    #[default]
+    Default = 0x00,
+    PlusOne = 0x01,
+    MinusOne = 0x02,
+    PlusTwo = 0x03,
+    MinusTwo = 0x04,
+    PlusThree = 0x05,
+    MinusThree = 0x06,
+    PlusFour = 0x07,
+    MinusFour = 0x08,
+}
+
+#[derive(Debug, Clone)]
+#[repr(u8)]
+enum PowerMode {
+    LowPower = 0x07,
+    Normal = 0x05,
 }
 
 #[derive(Debug, Clone)]
@@ -486,6 +592,78 @@ where
     ) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.disable_auto_white_balance()?;
         self.write_reg(RegisterAddress::WhiteBalanceMode, mode as u8)?;
+        self.wait_idle()
+    }
+
+    #[inline]
+    fn set_power_mode(&mut self, mode: PowerMode) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.write_reg(RegisterAddress::Power, mode as u8)
+    }
+
+    /// Turns on the camera's low power mode
+    #[inline]
+    pub fn enable_low_power_mode(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.set_power_mode(PowerMode::LowPower)
+    }
+
+    /// Turns off the camera's low power mode
+    #[inline]
+    pub fn disable_low_power_mode(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.set_power_mode(PowerMode::Normal)
+    }
+
+    /// Sets the camera's brightness bias
+    pub fn set_brightness_bias(
+        &mut self,
+        level: BrightnessLevel,
+    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.write_reg(RegisterAddress::Brightness, level as u8)?;
+        self.wait_idle()
+    }
+
+    /// Sets the camera's contrast
+    pub fn set_contrast(
+        &mut self,
+        level: ContrastLevel,
+    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.write_reg(RegisterAddress::Contrast, level as u8)?;
+        self.wait_idle()
+    }
+
+    /// Sets the camera's saturation
+    pub fn set_saturation(
+        &mut self,
+        level: SaturationLevel,
+    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.write_reg(RegisterAddress::Saturation, level as u8)?;
+        self.wait_idle()
+    }
+
+    /// Sets the camera's exposure
+    pub fn set_exposure(
+        &mut self,
+        level: ExposureLevel,
+    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.write_reg(RegisterAddress::Exposure, level as u8)?;
+        self.wait_idle()
+    }
+
+    /// Sets the camera's color effect
+    pub fn set_color_effect(
+        &mut self,
+        effect: ColorEffect,
+    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.write_reg(RegisterAddress::ColorEffect, effect as u8)?;
+        self.wait_idle()
+    }
+
+    /// Sets the camera's color effect
+    #[cfg(feature = "3mp")]
+    pub fn set_sharpness(
+        &mut self,
+        level: SharpnessLevel,
+    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.write_reg(RegisterAddress::Sharpness, level as u8)?;
         self.wait_idle()
     }
 }
@@ -999,6 +1177,135 @@ mod tests {
         let mut spi = spi::Mock::new(&expectations);
         let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
         c.set_white_balance_mode(WhiteBalanceMode::Home).unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn enable_low_power_mode_writes_a_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0x82, 0x07]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.enable_low_power_mode().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn disable_low_power_mode_writes_a_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0x82, 0x05]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.disable_low_power_mode().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn set_brightness_bias_writes_a_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xa2, 0x03]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_brightness_bias(BrightnessLevel::PlusTwo).unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn set_contrast_writes_a_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xa3, 0x03]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_contrast(ContrastLevel::PlusTwo).unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn set_saturation_writes_a_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xa4, 0x03]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_saturation(SaturationLevel::PlusTwo).unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn set_exposure_writes_a_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xa5, 0x03]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_exposure(ExposureLevel::PlusTwo).unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn set_color_effect_writes_a_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xa7, 0x03]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_color_effect(ColorEffect::BlackWhite).unwrap();
+        spi.done();
+    }
+
+    #[cfg(feature = "3mp")]
+    #[test]
+    fn set_sharpness_writes_a_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xa8, 0x03]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_sharpness(SharpnessLevel::Three).unwrap();
         spi.done();
     }
 }
