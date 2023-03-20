@@ -73,6 +73,7 @@ enum RegisterAddress {
     CaptureResolution = 0x21,
     Brightness = 0x22,
     Contrast = 0x23,
+    Saturation = 0x24,
     WhiteBalanceMode = 0x26,
     #[cfg(feature = "5mp")]
     AutoFocus = 0x29,
@@ -82,6 +83,20 @@ enum RegisterAddress {
     FifoSize1 = 0x45,
     FifoSize2 = 0x46,
     FifoSize3 = 0x47,
+}
+
+/// Values to set the saturation of the camera
+#[derive(Debug, Clone, Default)]
+#[repr(u8)]
+pub enum SaturationLevel {
+    #[default]
+    Default = 0x00,
+    PlusOne = 0x01,
+    MinusOne = 0x02,
+    PlusTwo = 0x03,
+    MinusTwo = 0x04,
+    PlusThree = 0x05,
+    MinusThree = 0x06,
 }
 
 /// Values to set the contrast of the camera
@@ -561,6 +576,15 @@ where
         level: ContrastLevel,
     ) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::Contrast, level as u8)?;
+        self.wait_idle()
+    }
+
+    /// Sets the camera's saturation
+    pub fn set_saturation(
+        &mut self,
+        level: SaturationLevel,
+    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.write_reg(RegisterAddress::Saturation, level as u8)?;
         self.wait_idle()
     }
 }
@@ -1134,6 +1158,23 @@ mod tests {
         let mut spi = spi::Mock::new(&expectations);
         let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
         c.set_contrast(ContrastLevel::PlusTwo).unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn set_saturation_writes_a_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xa4, 0x03]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_saturation(SaturationLevel::PlusTwo).unwrap();
         spi.done();
     }
 }
