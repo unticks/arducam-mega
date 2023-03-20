@@ -1,3 +1,12 @@
+//! # `arducam-mega`
+//!
+//! `arducam-mega` is an [`embedded-hal`][hal] SPI driver for the [Arducam Mega][mega]. This driver
+//! aims to provide access to all features of the camera. However, due to hardware access and time
+//! constraints, not all features and hardware variants have been actively tested.
+//!
+//! [hal]: https://github.com/rust-embedded/embedded-hal
+//! [mega]: https://www.arducam.com/camera-for-any-microcontroller/
+
 #![no_std]
 
 #[cfg(not(any(feature = "3mp", feature = "5mp")))]
