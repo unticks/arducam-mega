@@ -7,7 +7,7 @@
 //! [hal]: https://github.com/rust-embedded/embedded-hal
 //! [mega]: https://www.arducam.com/camera-for-any-microcontroller/
 
-#![no_std]
+#![cfg_attr(not(test), no_std)]
 
 #[cfg(not(any(feature = "3mp", feature = "5mp")))]
 compile_error!(
@@ -465,10 +465,502 @@ pub enum Error<SPI, Delay> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use embedded_hal_mock::{delay, spi};
+    use embedded_hal_mock::{
+        delay,
+        spi::{self, Transaction},
+    };
 
     #[test]
-    fn new_works() {
-        let _c = ArducamMega::new(spi::Mock::new(&[]), delay::MockNoop::new());
+    fn read_reg_returns_third_byte() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x45], vec![0x00, 0x00, 0x01]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        assert_eq!(c.read_reg(RegisterAddress::FifoSize1).unwrap(), 0x01);
+        spi.done();
+    }
+
+    #[test]
+    fn write_reg_transforms_addr() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xc5, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.write_reg(RegisterAddress::FifoSize1, 0x02).unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn reset_sends_correct_data() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0x87, 0x40]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.reset().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn wait_idle_returns_immediately_if_idle() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.wait_idle().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn wait_idle_waits_until_idle() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x01]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x01]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x01]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x01, 0x01, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.wait_idle().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn get_id_reads_a_register() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x40], vec![0x00, 0x00, 0x01]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.get_id().unwrap();
+        spi.done();
+    }
+
+    #[cfg(feature = "5mp")]
+    #[test]
+    fn set_auto_focus_writes_a_register() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xa9, 0x33]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_auto_focus(0x33).unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn set_format_writes_a_register() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xa0, 0x01]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_format(CaptureFormat::default()).unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn set_resolution_writes_a_register() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xa1, 0x84]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_resolution(CaptureResolution::Hd).unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn set_debug_device_address_writes_a_register() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0x8a, 0x33]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_debug_device_address(0x33).unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn clear_fifo_writes_a_register() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0x84, 0x01]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.clear_fifo().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn capture_finished_detects_unfinished() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0xfb]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        assert!(!c.capture_finished().unwrap());
+        spi.done();
+    }
+
+    #[test]
+    fn capture_finished_detects_finished() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x04]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        assert!(c.capture_finished().unwrap());
+        spi.done();
+    }
+
+    #[test]
+    fn capture_no_block_clears_fifo_and_writes_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0x84, 0x01]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0x84, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.capture_noblock().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn capture_returns_instantly_after_capture_finishes() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0x84, 0x01]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0x84, 0x02]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x04]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.capture().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn capture_blocks_until_capture_finished() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0x84, 0x01]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0x84, 0x02]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x00]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x00]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x00]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x04]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.capture().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn read_fifo_length_reads_three_regs() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x45], vec![0x00, 0x00, 0xab]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x46], vec![0x00, 0x00, 0xbc]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x47], vec![0x00, 0x00, 0xcd]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        assert_eq!(c.read_fifo_length().unwrap(), 13483179);
+        spi.done();
+    }
+
+    #[test]
+    fn read_fifo_byte_reads_a_register() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x3d], vec![0x00, 0x00, 0x33]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        assert_eq!(c.read_fifo_byte().unwrap(), 0x33);
+        spi.done();
+    }
+
+    #[test]
+    fn read_fifo_full_skips_first_two_bytes() {
+        let mut buffer = [0; 65];
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::transfer(
+                vec![0x3c],
+                vec![
+                    0x00, 0x00, 0x33, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+                    0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+                    0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+                    0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+                    0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
+                ],
+            ),
+            Transaction::transfer(vec![0x3c], vec![0x00, 0x00]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.read_fifo_full(&mut buffer).unwrap();
+        assert_eq!(buffer[0], 0x33);
+        assert_eq!(buffer.iter().map(|i| *i as u32).sum::<u32>(), 113);
+        spi.done();
+    }
+
+    #[test]
+    fn read_fifo_full_detects_eof_jpeg_marker() {
+        let mut buffer = [0; 65];
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::transfer(
+                vec![0x3c],
+                vec![
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xd9, 0x00, 0x00, 0x00, 0x00,
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+                ],
+            ),
+            Transaction::transfer(vec![0x3c], vec![0x00, 0x00]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        let pos = c.read_fifo_full(&mut buffer).unwrap();
+        assert_eq!(buffer[pos - 2], 0xff);
+        assert_eq!(buffer[pos - 1], 0xd9);
+        spi.done();
+    }
+
+    #[test]
+    fn set_auto_camera_control_writes_a_register() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xaa, 0x81]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_auto_camera_control(CameraControl::Exposure, ControlValue::Enable)
+            .unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn enable_auto_white_balance_writes_a_register() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xaa, 0x82]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.enable_auto_white_balance().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn disable_auto_white_balance_writes_a_register() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xaa, 0x02]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.disable_auto_white_balance().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn enable_auto_iso_writes_a_register() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xaa, 0x80]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.enable_auto_iso().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn disable_auto_iso_writes_a_register() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xaa, 0x00]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.disable_auto_iso().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn enable_auto_exposure_writes_a_register() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xaa, 0x81]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.enable_auto_exposure().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn disable_auto_exposure_writes_a_register() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xaa, 0x01]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.disable_auto_exposure().unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn set_white_balance_mode_disables_autowb_and_writes_a_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xaa, 0x02]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xa6, 0x04]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_white_balance_mode(WhiteBalanceMode::Home).unwrap();
+        spi.done();
     }
 }
