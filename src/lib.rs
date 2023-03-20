@@ -21,10 +21,38 @@ const WRITE_REGISTER_MASK: u8 = 0x80;
 const SENSOR_STATE_MASK: u8 = 0x03;
 const SENSOR_STATE_IDLE: u8 = 0x02;
 const SENSOR_RESET_ENABLE: u8 = 0x40;
-const SENSOR_ID_MASK: u8 = 0x0f;
 const CAPTURE_FINISHED_MASK: u8 = 0x04;
 const FIFO_READ_BURST: u8 = 0x3c;
 const FIFO_READ_SINGLE: u8 = 0x3d;
+
+/// Represents the type of camera connected to the SPI bus
+///
+/// This enum is typically returned by [`ArducamMega::get_camera_type`], and indicates what kind of
+/// camera was detected on the SPI bus.
+///
+/// **Please note**: The value `0x82` for `OV3640` is a guess based on the Arducam SDK. Please
+/// submit an issue on GitHub if you have a 3MP Mega and can confirm that this works. Likewise, if
+/// your camera reports the `Unknown(u8)` variant, please get in touch so we can add support for it
+/// in the library.
+#[derive(Debug, Clone, PartialEq)]
+#[repr(u8)]
+pub enum CameraType {
+    /// Arducam Mega 5MP
+    OV5640 = 0x81,
+    /// Arducam Mega 3MP
+    OV3640 = 0x82,
+    Unknown(u8),
+}
+
+impl From<u8> for CameraType {
+    fn from(id: u8) -> Self {
+        match id {
+            0x81 => CameraType::OV5640,
+            0x82 => CameraType::OV3640,
+            id => CameraType::Unknown(id),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 enum CameraControl {
@@ -205,11 +233,10 @@ where
         self.wait_idle()
     }
 
-    pub fn get_id(&mut self) -> Result<u8, Error<SPI::Error, Delay::Error>> {
-        let id = (self.read_reg(RegisterAddress::SensorId)? & SENSOR_ID_MASK) - 1;
-        self.wait_idle()?;
+    pub fn get_camera_type(&mut self) -> Result<CameraType, Error<SPI::Error, Delay::Error>> {
+        let id = self.read_reg(RegisterAddress::SensorId)?;
 
-        Ok(id)
+        Ok(id.into())
     }
 
     /// Sets the auto-focus of the camera
@@ -549,19 +576,23 @@ mod tests {
     }
 
     #[test]
-    fn get_id_reads_a_register() {
+    fn get_camera_type_reads_a_register_and_returns_an_enum() {
         let expectations = [
             Transaction::transaction_start(),
-            Transaction::transfer(vec![0x40], vec![0x00, 0x00, 0x01]),
+            Transaction::transfer(vec![0x40], vec![0x00, 0x00, 0x81]),
             Transaction::transaction_end(),
-            // wait_idle
             Transaction::transaction_start(),
-            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transfer(vec![0x40], vec![0x00, 0x00, 0x82]),
+            Transaction::transaction_end(),
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x40], vec![0x00, 0x00, 0x33]),
             Transaction::transaction_end(),
         ];
         let mut spi = spi::Mock::new(&expectations);
         let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
-        c.get_id().unwrap();
+        assert_eq!(c.get_camera_type().unwrap(), CameraType::OV5640);
+        assert_eq!(c.get_camera_type().unwrap(), CameraType::OV3640);
+        assert_eq!(c.get_camera_type().unwrap(), CameraType::Unknown(0x33));
         spi.done();
     }
 
