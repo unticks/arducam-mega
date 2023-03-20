@@ -55,6 +55,7 @@ impl From<u8> for CameraType {
 }
 
 #[derive(Debug, Clone)]
+#[repr(u8)]
 enum CameraControl {
     Gain = 0x00, // ISO
     Exposure = 0x01,
@@ -62,6 +63,7 @@ enum CameraControl {
 }
 
 #[derive(Debug, Clone)]
+#[repr(u8)]
 enum RegisterAddress {
     ArduchipFifo = 0x04,
     SensorReset = 0x07,
@@ -80,6 +82,7 @@ enum RegisterAddress {
 }
 
 #[derive(Debug, Clone)]
+#[repr(u8)]
 enum ControlValue {
     Disable = 0x00,
     Enable = 0x80,
@@ -90,6 +93,7 @@ enum ControlValue {
 /// You will most likely want to use `Jpeg`, as `Rgb` generates images that are much greater in
 /// size than `Jpeg`, and could therefore data blobs that are too big for your MCU to handle.
 #[derive(Debug, Clone, Default)]
+#[repr(u8)]
 pub enum CaptureFormat {
     #[default]
     /// Default. Offers a good mix between image quality and data size
@@ -111,6 +115,7 @@ pub enum CaptureFormat {
 /// enabled, the enum will default to the camera's maximum supported resolution: `Qxga`. When only
 /// the `5mp` feature is enabled, the enum will default to `Wqxga2`.
 #[derive(Debug, Clone, Default)]
+#[repr(u8)]
 pub enum CaptureResolution {
     /// QQVGA resolution (160x120). Untested, and the official Arducam SDK does not list this
     /// resolution as supported by either the 3MP or 5MP Arducam Mega.
@@ -154,6 +159,7 @@ pub enum CaptureResolution {
 }
 
 #[derive(Debug, Clone)]
+#[repr(u8)]
 enum ArduchipCommand {
     Clear = 0x01,
     Start = 0x02,
@@ -165,6 +171,7 @@ enum ArduchipCommand {
 /// operates. For most consistent results, it is recommended to use a specific mode, which will
 /// prevent the camera from randomly switching from one mode to another.
 #[derive(Debug, Clone, Default)]
+#[repr(u8)]
 pub enum WhiteBalanceMode {
     #[default]
     Auto = 0x00,
