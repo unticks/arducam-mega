@@ -19,7 +19,6 @@ compile_error!(
 
 use embedded_hal::{delay::DelayUs, spi::SpiBus, spi::SpiDevice};
 
-const READ_REGISTER_MASK: u8 = 0x7f;
 const WRITE_REGISTER_MASK: u8 = 0x80;
 const SENSOR_STATE_MASK: u8 = 0x03;
 const SENSOR_STATE_IDLE: u8 = 0x02;
@@ -286,7 +285,7 @@ where
     }
 
     fn read_reg(&mut self, addr: RegisterAddress) -> Result<u8, Error<SPI::Error, Delay::Error>> {
-        let out: [u8; 1] = [addr as u8 & READ_REGISTER_MASK];
+        let out: [u8; 1] = [addr as u8];
         let mut buf = [0; 3];
 
         self.spi
