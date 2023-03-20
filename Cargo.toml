@@ -1,0 +1,28 @@
+[package]
+authors = ["Sebastian Lauwers <sl@unticks.com>"]
+name = "arducam-mega"
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/unticks/arducam-mega/"
+keywords = ["arducam", "mega", "arducam-mega", "embedded", "spi"]
+categories = ["embedded", "hardware-support", "no-std::no-alloc", "multimedia::images"]
+readme = "README.md"
+description = "SPI driver for the Arducam Mega"
+
+[badges]
+maintenance = { status = "experimental" }
+
+[dependencies]
+# This dependency will be relaxed once embedded-hal is released as 1.0.0. Until
+# then, we target a specific alpha as the previous stable release breaks too
+# much.
+embedded-hal = { version = "1.0.0-alpha.9" }
+
+[features]
+default = ["3mp", "5mp"]
+3mp = []
+5mp = []
+
+[dev-dependencies]
+embedded-hal-mock = { git = "https://github.com/dbrgn/embedded-hal-mock", rev = "3d5ecf6" }
