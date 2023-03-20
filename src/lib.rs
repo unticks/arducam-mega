@@ -126,38 +126,10 @@ pub enum ColorEffect {
     Solarize = 0x08,
 }
 
-/// Values to set the exposure of the camera
+/// Values to set the level of some configuration settings
 #[derive(Debug, Clone, Default)]
 #[repr(u8)]
-pub enum ExposureLevel {
-    #[default]
-    Default = 0x00,
-    PlusOne = 0x01,
-    MinusOne = 0x02,
-    PlusTwo = 0x03,
-    MinusTwo = 0x04,
-    PlusThree = 0x05,
-    MinusThree = 0x06,
-}
-
-/// Values to set the saturation of the camera
-#[derive(Debug, Clone, Default)]
-#[repr(u8)]
-pub enum SaturationLevel {
-    #[default]
-    Default = 0x00,
-    PlusOne = 0x01,
-    MinusOne = 0x02,
-    PlusTwo = 0x03,
-    MinusTwo = 0x04,
-    PlusThree = 0x05,
-    MinusThree = 0x06,
-}
-
-/// Values to set the contrast of the camera
-#[derive(Debug, Clone, Default)]
-#[repr(u8)]
-pub enum ContrastLevel {
+pub enum Level {
     #[default]
     Default = 0x00,
     PlusOne = 0x01,
@@ -633,28 +605,19 @@ where
     }
 
     /// Sets the camera's contrast
-    pub fn set_contrast(
-        &mut self,
-        level: ContrastLevel,
-    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn set_contrast(&mut self, level: Level) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::Contrast, level as u8)?;
         self.wait_idle()
     }
 
     /// Sets the camera's saturation
-    pub fn set_saturation(
-        &mut self,
-        level: SaturationLevel,
-    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn set_saturation(&mut self, level: Level) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::Saturation, level as u8)?;
         self.wait_idle()
     }
 
     /// Sets the camera's exposure
-    pub fn set_exposure(
-        &mut self,
-        level: ExposureLevel,
-    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn set_exposure(&mut self, level: Level) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::Exposure, level as u8)?;
         self.wait_idle()
     }
@@ -1248,7 +1211,7 @@ mod tests {
         ];
         let mut spi = spi::Mock::new(&expectations);
         let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
-        c.set_contrast(ContrastLevel::PlusTwo).unwrap();
+        c.set_contrast(Level::PlusTwo).unwrap();
         spi.done();
     }
 
@@ -1265,7 +1228,7 @@ mod tests {
         ];
         let mut spi = spi::Mock::new(&expectations);
         let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
-        c.set_saturation(SaturationLevel::PlusTwo).unwrap();
+        c.set_saturation(Level::PlusTwo).unwrap();
         spi.done();
     }
 
@@ -1282,7 +1245,7 @@ mod tests {
         ];
         let mut spi = spi::Mock::new(&expectations);
         let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
-        c.set_exposure(ExposureLevel::PlusTwo).unwrap();
+        c.set_exposure(Level::PlusTwo).unwrap();
         spi.done();
     }
 
