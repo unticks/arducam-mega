@@ -26,3 +26,10 @@ default = ["3mp", "5mp"]
 
 [dev-dependencies]
 embedded-hal-mock = { git = "https://github.com/dbrgn/embedded-hal-mock", rev = "3d5ecf6" }
+
+# docs.rs-specific configuration
+[package.metadata.docs.rs]
+# document all features
+all-features = true
+# defines the configuration attribute `docsrs`
+rustdoc-args = ["--cfg", "docsrs"]

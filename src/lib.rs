@@ -8,6 +8,9 @@
 //! [mega]: https://www.arducam.com/camera-for-any-microcontroller/
 
 #![cfg_attr(not(test), no_std)]
+// only enables the `doc_cfg` feature when
+// the `docsrs` configuration attribute is defined
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 #[cfg(not(any(feature = "3mp", feature = "5mp")))]
 compile_error!(
@@ -90,6 +93,7 @@ enum RegisterAddress {
 }
 
 /// Values to set the sharpness of the camera
+#[cfg_attr(docsrs, doc(cfg(feature = "3mp")))]
 #[cfg(feature = "3mp")]
 #[derive(Debug, Clone, Default)]
 #[repr(u8)]
@@ -244,12 +248,14 @@ pub enum CaptureResolution {
     /// the `3mp` and `5mp` features are enabled.
     Fhd = 0x07,
 
+    #[cfg_attr(docsrs, doc(cfg(feature = "3mp")))]
     #[cfg(feature = "3mp")]
     #[cfg_attr(not(feature = "5mp"), default)]
     /// QXGA resolution (2048x1536). Untested. This is the default choice for this enum when the
     /// `3mp` feature (only) is enabled.
     Qxga = 0x08,
 
+    #[cfg_attr(docsrs, doc(cfg(feature = "5mp")))]
     #[cfg(feature = "5mp")]
     #[cfg_attr(not(feature = "3mp"), default)]
     /// WQXGA2 resolution (2592x1944). Untested. This is the default choice for this enum when the
@@ -346,6 +352,10 @@ where
         self.wait_idle()
     }
 
+    /// Reads the camera model from the camera
+    ///
+    /// This function uses the `SensorId` register in the camera to obtain information about the
+    /// sensor type. See [`CameraType`](CameraType) for more information.
     pub fn get_camera_type(&mut self) -> Result<CameraType, Error<SPI::Error, Delay::Error>> {
         let id = self.read_reg(RegisterAddress::SensorId)?;
 
@@ -357,6 +367,7 @@ where
     /// It is not clear how this feature should be used. As of current testing, only sending `0x00`
     /// actually produces successful captures. Sending `0x01` makes the camera produce invalid
     /// image data. More testing welcome.
+    #[cfg_attr(docsrs, doc(cfg(feature = "5mp")))]
     #[cfg(feature = "5mp")]
     pub fn set_auto_focus(&mut self, value: u8) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::AutoFocus, value)?;
@@ -658,6 +669,7 @@ where
     }
 
     /// Sets the camera's color effect
+    #[cfg_attr(docsrs, doc(cfg(feature = "3mp")))]
     #[cfg(feature = "3mp")]
     pub fn set_sharpness(
         &mut self,
