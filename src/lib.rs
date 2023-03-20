@@ -76,6 +76,7 @@ enum RegisterAddress {
     Saturation = 0x24,
     Exposure = 0x25,
     WhiteBalanceMode = 0x26,
+    ColorEffect = 0x27,
     #[cfg(feature = "5mp")]
     AutoFocus = 0x29,
     GainExposureWhiteBalance = 0x2a,
@@ -84,6 +85,22 @@ enum RegisterAddress {
     FifoSize1 = 0x45,
     FifoSize2 = 0x46,
     FifoSize3 = 0x47,
+}
+
+/// Values to set the exposure of the camera
+#[derive(Debug, Clone, Default)]
+#[repr(u8)]
+pub enum ColorEffect {
+    #[default]
+    None = 0x00,
+    Blueish = 0x01,
+    Redish = 0x02,
+    BlackWhite = 0x03,
+    Sepia = 0x04,
+    Negative = 0x05,
+    GrassGreen = 0x06,
+    OverExposure = 0x07,
+    Solarize = 0x08,
 }
 
 /// Values to set the exposure of the camera
@@ -609,6 +626,15 @@ where
         level: ExposureLevel,
     ) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::Exposure, level as u8)?;
+        self.wait_idle()
+    }
+
+    /// Sets the camera's color effect
+    pub fn set_color_effect(
+        &mut self,
+        effect: ColorEffect,
+    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.write_reg(RegisterAddress::ColorEffect, effect as u8)?;
         self.wait_idle()
     }
 }
@@ -1216,6 +1242,23 @@ mod tests {
         let mut spi = spi::Mock::new(&expectations);
         let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
         c.set_exposure(ExposureLevel::PlusTwo).unwrap();
+        spi.done();
+    }
+
+    #[test]
+    fn set_color_effect_writes_a_reg() {
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::write_vec(vec![0xa7, 0x03]),
+            Transaction::transaction_end(),
+            // wait_idle
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x44], vec![0x00, 0x00, 0x02]),
+            Transaction::transaction_end(),
+        ];
+        let mut spi = spi::Mock::new(&expectations);
+        let mut c = ArducamMega::new(&mut spi, delay::MockNoop::new());
+        c.set_color_effect(ColorEffect::BlackWhite).unwrap();
         spi.done();
     }
 }
