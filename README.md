@@ -1,7 +1,7 @@
 [![crates.io](https://img.shields.io/crates/d/arducam-mega.svg)][cratesio]
 [![crates.io](https://img.shields.io/crates/v/arducam-mega.svg)][cratesio]
 [![Documentation](https://docs.rs/arducam-mega/badge.svg)][docsrs]
-![Minimum Supported Rust Version](https://img.shields.io/badge/rustc-1.68+-blue.svg)
+![Minimum Supported Rust Version](https://img.shields.io/badge/rustc-1.66+-blue.svg)
 
 [cratesio]: https://crates.io/crates/arducam-mega
 [docsrs]: https://docs.rs/arducam-mega
@@ -28,8 +28,11 @@ We welcome testing using other cameras and other embedded systems.
 
 ## Minimum Supported Rust Version (MSRV)
 
-This crate is guaranteed to compile on stable Rust 1.59 and up. It *might*
-compile with older versions but that may change in any new patch release.
+This crate is guaranteed to compile on stable Rust 1.66 and up. The crate uses
+custom discriminants and enum variants simultaneously, which is only officially
+supported [since Rust 1.66][discriminants].
+
+[discriminants]: https://blog.rust-lang.org/2022/12/15/Rust-1.66.0.html#explicit-discriminants-on-enums-with-fields
 
 ## License
 
