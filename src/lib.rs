@@ -630,7 +630,7 @@ where
         self.wait_idle()
     }
 
-    /// Sets the camera's color effect
+    /// Sets the camera's sharpness
     #[cfg_attr(docsrs, doc(cfg(feature = "3mp")))]
     #[cfg(feature = "3mp")]
     pub fn set_sharpness(
