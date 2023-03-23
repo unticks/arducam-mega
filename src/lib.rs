@@ -313,6 +313,49 @@ pub enum WhiteBalanceMode {
 /// This struct is the driver's main entrypoint. By providing it with a configured SPI device and
 /// Delay implementation, this driver will be able to configure the Arducam Mega camera, take
 /// pictures, and read the picture data back from the camera.
+///
+/// # Examples
+///
+/// The following example shows how the camera could be used on an ESP32 using the SPI3 device.
+///
+/// ```ignore
+/// let peripherals = Peripherals::take();
+/// let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock240MHz).freeze();
+/// let delay = Delay::new(&clocks);
+///
+/// let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
+/// let sclk = io.pins.gpio18;
+/// let miso = io.pins.gpio19;
+/// let mosi = io.pins.gpio23;
+/// let cs = io.pins.gpio5;
+///
+/// let spi_controller = SpiBusController::from_spi(Spi::new_no_cs(
+///     peripherals.SPI3,
+///     sclk,
+///     mosi,
+///     miso,
+///     8u32.MHz(),
+///     SpiMode::Mode0,
+///     &mut system.peripheral_clock_control,
+///     &clocks,
+/// ));
+///
+/// let spi_device_1 = spi_controller.add_device(cs);
+///
+/// let mut cam = ArducamMega::new(spi_device_1, delay);
+///
+/// cam.reset()?
+///     .set_format(Format::Jpeg)?
+///     .set_resolution(Resolution::Hd)?
+///     .set_white_balance_mode(WhiteBalanceMode::Home)?;
+///
+/// let length = cam
+///     .capture()?
+///     .read_fifo_length()?;
+///
+/// // assuming buf.len() == length
+/// cam.read_fifo_full(buf)?;
+/// ```
 pub struct ArducamMega<SPI, Delay> {
     spi: SPI,
     delay: Delay,
