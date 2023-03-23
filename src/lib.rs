@@ -39,8 +39,8 @@
 //! let mut cam = ArducamMega::new(spi_device_1, delay);
 //!
 //! cam.reset()?;
-//! cam.set_format(CaptureFormat::Jpeg)?;
-//! cam.set_resolution(CaptureResolution::Hd)?;
+//! cam.set_format(Format::Jpeg)?;
+//! cam.set_resolution(Resolution::Hd)?;
 //! cam.set_white_balance_mode(WhiteBalanceMode::Home)?;
 //! cam.capture()?;
 //! let length = cam.read_fifo_length()?;
@@ -113,8 +113,8 @@ enum RegisterAddress {
     ArduchipFifo = 0x04,
     SensorReset = 0x07,
     DebugDeviceAddress = 0x0a,
-    CaptureFormat = 0x20,
-    CaptureResolution = 0x21,
+    Format = 0x20,
+    Resolution = 0x21,
     Brightness = 0x22,
     Contrast = 0x23,
     Saturation = 0x24,
@@ -217,7 +217,7 @@ enum ControlValue {
 /// size than `Jpeg`, and could therefore data blobs that are too big for your MCU to handle.
 #[derive(Debug, Clone, Default)]
 #[repr(u8)]
-pub enum CaptureFormat {
+pub enum Format {
     #[default]
     /// Default. Offers a good mix between image quality and data size
     Jpeg = 0x01,
@@ -239,7 +239,7 @@ pub enum CaptureFormat {
 /// the `5mp` feature is enabled, the enum will default to `Wqxga2`.
 #[derive(Debug, Clone, Default)]
 #[repr(u8)]
-pub enum CaptureResolution {
+pub enum Resolution {
     /// QQVGA resolution (160x120). Untested, and the official Arducam SDK does not list this
     /// resolution as supported by either the 3MP or 5MP Arducam Mega.
     Qqvga = 0x00,
@@ -390,13 +390,10 @@ where
     /// Sets the capture format of the camera
     ///
     /// This function allows you to control what format the camera captures pictures in.
-    /// `CaptureFormat::Jpeg` provides a good mix between image size and quality, and is the
+    /// `Format::Jpeg` provides a good mix between image size and quality, and is the
     /// default.
-    pub fn set_format(
-        &mut self,
-        format: CaptureFormat,
-    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
-        self.write_reg(RegisterAddress::CaptureFormat, format as u8)?;
+    pub fn set_format(&mut self, format: Format) -> Result<(), Error<SPI::Error, Delay::Error>> {
+        self.write_reg(RegisterAddress::Format, format as u8)?;
         self.wait_idle()
     }
 
@@ -404,13 +401,13 @@ where
     ///
     /// This function allows you to control the resolution of the pictures that are captured by the
     /// camera. Both the 3MP and 5MP cameras have two different default resolutions. See
-    /// [`CaptureResolution`](CaptureResolution) for more details.
+    /// [`Resolution`](Resolution) for more details.
     pub fn set_resolution(
         &mut self,
-        resolution: CaptureResolution,
+        resolution: Resolution,
     ) -> Result<(), Error<SPI::Error, Delay::Error>> {
         self.write_reg(
-            RegisterAddress::CaptureResolution,
+            RegisterAddress::Resolution,
             resolution as u8 | WRITE_REGISTER_MASK,
         )?;
         self.wait_idle()
@@ -831,7 +828,7 @@ mod tests {
     fn set_format_writes_a_register() {
         let expectations = expect!(send vec![0xa0, 0x01], wait_idle);
         harness!(expectations, spi, cam);
-        cam.set_format(CaptureFormat::default()).unwrap();
+        cam.set_format(Format::default()).unwrap();
         spi.done();
     }
 
@@ -839,7 +836,7 @@ mod tests {
     fn set_resolution_writes_a_register() {
         let expectations = expect!(send vec![0xa1, 0x84], wait_idle);
         harness!(expectations, spi, cam);
-        cam.set_resolution(CaptureResolution::Hd).unwrap();
+        cam.set_resolution(Resolution::Hd).unwrap();
         spi.done();
     }
 
