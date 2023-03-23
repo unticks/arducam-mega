@@ -38,12 +38,14 @@
 //!
 //! let mut cam = ArducamMega::new(spi_device_1, delay);
 //!
-//! cam.reset()?;
-//! cam.set_format(Format::Jpeg)?;
-//! cam.set_resolution(Resolution::Hd)?;
-//! cam.set_white_balance_mode(WhiteBalanceMode::Home)?;
-//! cam.capture()?;
-//! let length = cam.read_fifo_length()?;
+//! cam.reset()?
+//!     .set_format(Format::Jpeg)?
+//!     .set_resolution(Resolution::Hd)?
+//!     .set_white_balance_mode(WhiteBalanceMode::Home)?;
+//!
+//! let length = cam
+//!     .capture()?
+//!     .read_fifo_length()?;
 //!
 //! // assuming buf.len() == length
 //! cam.read_fifo_full(buf)?;
@@ -341,26 +343,28 @@ where
         &mut self,
         addr: RegisterAddress,
         value: u8,
-    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         let out: [u8; 2] = [addr as u8 | WRITE_REGISTER_MASK, value];
-        self.spi.write(&out[..]).map_err(Error::Spi)
+        self.spi.write(&out[..]).map_err(Error::Spi)?;
+
+        Ok(self)
     }
 
-    fn wait_idle(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    fn wait_idle(&mut self) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         while (self.read_reg(RegisterAddress::SensorState)? & SENSOR_STATE_MASK)
             != SENSOR_STATE_IDLE
         {
             self.delay.delay_us(500u32).map_err(Error::Delay)?;
         }
 
-        Ok(())
+        Ok(self)
     }
 
     /// Resets the camera sensor sensor
     ///
     /// This command sends a reset command to the camera. The Arducam SDK uses this after
     /// initialisation to ensure that the sensor is in a known-good state.
-    pub fn reset(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn reset(&mut self) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::SensorReset, SENSOR_RESET_ENABLE)?;
         self.wait_idle()
     }
@@ -382,7 +386,10 @@ where
     /// image data. More testing welcome.
     #[cfg_attr(docsrs, doc(cfg(feature = "5mp")))]
     #[cfg(feature = "5mp")]
-    pub fn set_auto_focus(&mut self, value: u8) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn set_auto_focus(
+        &mut self,
+        value: u8,
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::AutoFocus, value)?;
         self.wait_idle()
     }
@@ -392,7 +399,10 @@ where
     /// This function allows you to control what format the camera captures pictures in.
     /// `Format::Jpeg` provides a good mix between image size and quality, and is the
     /// default.
-    pub fn set_format(&mut self, format: Format) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn set_format(
+        &mut self,
+        format: Format,
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::Format, format as u8)?;
         self.wait_idle()
     }
@@ -405,7 +415,7 @@ where
     pub fn set_resolution(
         &mut self,
         resolution: Resolution,
-    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.write_reg(
             RegisterAddress::Resolution,
             resolution as u8 | WRITE_REGISTER_MASK,
@@ -420,7 +430,7 @@ where
     pub fn set_debug_device_address(
         &mut self,
         addr: u8,
-    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::DebugDeviceAddress, addr)?;
         self.wait_idle()
     }
@@ -429,7 +439,7 @@ where
     ///
     /// This command empties the contents of the camera's FIFO buffer. This is used as part of the
     /// [`capture()`](ArducamMega::capture) function.
-    fn clear_fifo(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    fn clear_fifo(&mut self) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::ArduchipFifo, ArduchipCommand::Clear as u8)
     }
 
@@ -449,22 +459,20 @@ where
     /// to capture an image. The image will be captured using the currently-configured settings
     /// (white balance, gain, exposure, colour filters, etc). This command blocks until the sensor
     /// has finished capturing the image.
-    pub fn capture(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn capture(&mut self) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.capture_noblock()?;
 
         while !self.capture_finished()? {
             self.delay.delay_us(500u32).map_err(Error::Delay)?;
         }
 
-        Ok(())
+        Ok(self)
     }
 
     /// Non-blocking version of [`capture()`](ArducamMega::capture)
-    pub fn capture_noblock(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn capture_noblock(&mut self) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.clear_fifo()?;
-        self.write_reg(RegisterAddress::ArduchipFifo, ArduchipCommand::Start as u8)?;
-
-        Ok(())
+        self.write_reg(RegisterAddress::ArduchipFifo, ArduchipCommand::Start as u8)
     }
 
     /// Reads the size of the camera's FIFO buffer length
@@ -522,7 +530,7 @@ where
     pub fn read_fifo_full(
         &mut self,
         data: &mut [u8],
-    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         let length = data.len();
 
         self.spi
@@ -543,14 +551,16 @@ where
 
                 Ok(())
             })
-            .map_err(Error::Spi)
+            .map_err(Error::Spi)?;
+
+        Ok(self)
     }
 
     fn set_auto_camera_control(
         &mut self,
         cc: CameraControl,
         value: ControlValue,
-    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.write_reg(
             RegisterAddress::GainExposureWhiteBalance,
             cc as u8 | value as u8,
@@ -563,7 +573,9 @@ where
     /// **Note**: This appears to not work on the ArducamMega 5MP, where pictures are severely
     /// green-tinted when using AWB.
     #[inline]
-    pub fn enable_auto_white_balance(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn enable_auto_white_balance(
+        &mut self,
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.set_auto_camera_control(CameraControl::WhiteBalance, ControlValue::Enable)
     }
 
@@ -572,31 +584,33 @@ where
     /// This function is automatically called by
     /// [`set_white_balance_mode()`](ArducamMega::set_white_balance_mode).
     #[inline]
-    pub fn disable_auto_white_balance(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn disable_auto_white_balance(
+        &mut self,
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.set_auto_camera_control(CameraControl::WhiteBalance, ControlValue::Disable)
     }
 
     /// Enables the camera's automatic gain adjustment
     #[inline]
-    pub fn enable_auto_iso(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn enable_auto_iso(&mut self) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.set_auto_camera_control(CameraControl::Gain, ControlValue::Enable)
     }
 
     /// Disables the camera's automatic gain adjustment
     #[inline]
-    pub fn disable_auto_iso(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn disable_auto_iso(&mut self) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.set_auto_camera_control(CameraControl::Gain, ControlValue::Disable)
     }
 
     /// Enables the camera's automatic exposure control
     #[inline]
-    pub fn enable_auto_exposure(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn enable_auto_exposure(&mut self) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.set_auto_camera_control(CameraControl::Exposure, ControlValue::Enable)
     }
 
     /// Disables the camera's automatic exposure control
     #[inline]
-    pub fn disable_auto_exposure(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn disable_auto_exposure(&mut self) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.set_auto_camera_control(CameraControl::Exposure, ControlValue::Disable)
     }
 
@@ -609,26 +623,29 @@ where
     pub fn set_white_balance_mode(
         &mut self,
         mode: WhiteBalanceMode,
-    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.disable_auto_white_balance()?;
         self.write_reg(RegisterAddress::WhiteBalanceMode, mode as u8)?;
         self.wait_idle()
     }
 
     #[inline]
-    fn set_power_mode(&mut self, mode: PowerMode) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    fn set_power_mode(
+        &mut self,
+        mode: PowerMode,
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::Power, mode as u8)
     }
 
     /// Turns on the camera's low power mode
     #[inline]
-    pub fn enable_low_power_mode(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn enable_low_power_mode(&mut self) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.set_power_mode(PowerMode::LowPower)
     }
 
     /// Turns off the camera's low power mode
     #[inline]
-    pub fn disable_low_power_mode(&mut self) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn disable_low_power_mode(&mut self) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.set_power_mode(PowerMode::Normal)
     }
 
@@ -636,25 +653,34 @@ where
     pub fn set_brightness_bias(
         &mut self,
         level: BrightnessLevel,
-    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::Brightness, level as u8)?;
         self.wait_idle()
     }
 
     /// Sets the camera's contrast
-    pub fn set_contrast(&mut self, level: Level) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn set_contrast(
+        &mut self,
+        level: Level,
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::Contrast, level as u8)?;
         self.wait_idle()
     }
 
     /// Sets the camera's saturation
-    pub fn set_saturation(&mut self, level: Level) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn set_saturation(
+        &mut self,
+        level: Level,
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::Saturation, level as u8)?;
         self.wait_idle()
     }
 
     /// Sets the camera's exposure
-    pub fn set_exposure(&mut self, level: Level) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    pub fn set_exposure(
+        &mut self,
+        level: Level,
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::Exposure, level as u8)?;
         self.wait_idle()
     }
@@ -663,7 +689,7 @@ where
     pub fn set_color_effect(
         &mut self,
         effect: ColorEffect,
-    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::ColorEffect, effect as u8)?;
         self.wait_idle()
     }
@@ -674,7 +700,7 @@ where
     pub fn set_sharpness(
         &mut self,
         level: SharpnessLevel,
-    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         self.write_reg(RegisterAddress::Sharpness, level as u8)?;
         self.wait_idle()
     }
