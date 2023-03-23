@@ -30,7 +30,7 @@ We welcome testing using other cameras and other embedded systems.
 
 This crate is guaranteed to compile on stable Rust 1.66 and up. The crate uses
 custom discriminants and enum variants simultaneously, which is only officially
-supported [since Rust 1.66][discriminants].
+supported [since Rust 1.66][discriminants]. This guarantee is enforced by CI.
 
 [discriminants]: https://blog.rust-lang.org/2022/12/15/Rust-1.66.0.html#explicit-discriminants-on-enums-with-fields
 
