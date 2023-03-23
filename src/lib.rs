@@ -2,10 +2,52 @@
 //!
 //! `arducam-mega` is an [`embedded-hal`][hal] SPI driver for the [Arducam Mega][mega]. This driver
 //! aims to provide access to all features of the camera. However, due to hardware access and time
-//! constraints, not all features and hardware variants have been actively tested.
+//! constraints, not all features and hardware variants have been actively tested. We welcome any
+//! and all contributions improving the support and quality of this library.
 //!
 //! [hal]: https://github.com/rust-embedded/embedded-hal
 //! [mega]: https://www.arducam.com/camera-for-any-microcontroller/
+//!
+//! # Examples
+//!
+//! The following example shows how the camera could be used on an ESP32 using the SPI3 device.
+//!
+//! ```ignore
+//! let peripherals = Peripherals::take();
+//! let clocks = ClockControl::configure(system.clock_control, CpuClock::Clock240MHz).freeze();
+//! let delay = Delay::new(&clocks);
+//!
+//! let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
+//! let sclk = io.pins.gpio18;
+//! let miso = io.pins.gpio19;
+//! let mosi = io.pins.gpio23;
+//! let cs = io.pins.gpio5;
+//!
+//! let spi_controller = SpiBusController::from_spi(Spi::new_no_cs(
+//!     peripherals.SPI3,
+//!     sclk,
+//!     mosi,
+//!     miso,
+//!     8u32.MHz(),
+//!     SpiMode::Mode0,
+//!     &mut system.peripheral_clock_control,
+//!     &clocks,
+//! ));
+//!
+//! let spi_device_1 = spi_controller.add_device(cs);
+//!
+//! let mut cam = ArducamMega::new(spi_device_1, delay);
+//!
+//! cam.reset()?;
+//! cam.set_format(CaptureFormat::Jpeg)?;
+//! cam.set_resolution(CaptureResolution::Hd)?;
+//! cam.set_white_balance_mode(WhiteBalanceMode::Home)?;
+//! cam.capture()?;
+//! let length = cam.read_fifo_length()?;
+//!
+//! // assuming buf.len() == length
+//! cam.read_fifo_full(buf)?;
+//! ```
 
 #![cfg_attr(not(test), no_std)]
 // only enables the `doc_cfg` feature when
