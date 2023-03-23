@@ -505,13 +505,24 @@ where
     /// Reads out the entire FIFO buffer
     ///
     /// Reads out the camera's entire FIFO buffer into `data`. `data` must be large enough to
-    /// accomodate the entire data transfer, or some data loss will occur. This function currently
-    /// attemps to find the end-of-file JPEG marker in the byte-stream and returns its location.
-    /// This is not currently tested for other data formats (YUV, RGB).
+    /// accomodate the entire data transfer (as indicated by
+    /// [`read_fifo_length()`](ArducamMega::read_fifo_length)), or some data loss may occur. The
+    /// data is currently read in chunks of 63 bytes, as this appears to be how the camera responds
+    /// to burst read commands (however, this may be a side-effect of the ESP32's SPI controller
+    /// used for testing). If the provided `data` buffer is longer than the FIFO contents, the
+    /// final bytes will be `0x00`.
+    ///
+    /// **Please note**: It appears the length reported by the camera through
+    /// [`read_fifo_length()`](ArducamMega::read_fifo_length) for JPEG pictures is bigger than the
+    /// actual picture. Previous versions of this function made attempts at finding the EOF marker
+    /// in the JPEG stream, however this is no longer the case. Please see
+    /// [`find_jpeg_eof()`](find_jpeg_eof) to help trim the data stream.
+    ///
+    /// This function is not currently tested with other data formats (YUV, RGB).
     pub fn read_fifo_full(
         &mut self,
         data: &mut [u8],
-    ) -> Result<usize, Error<SPI::Error, Delay::Error>> {
+    ) -> Result<(), Error<SPI::Error, Delay::Error>> {
         let length = data.len();
 
         self.spi
@@ -532,19 +543,7 @@ where
 
                 Ok(())
             })
-            .map_err(Error::Spi)?;
-
-        let marker = data
-            .windows(2)
-            .enumerate()
-            .filter_map(|(i, p)| match p {
-                [0xff, 0xd9] => Some(i + 2),
-                _ => None,
-            })
-            .last()
-            .unwrap_or(length);
-
-        Ok(marker)
+            .map_err(Error::Spi)
     }
 
     fn set_auto_camera_control(
@@ -687,6 +686,36 @@ pub enum Error<SPI, Delay> {
     Delay(Delay),
 }
 
+/// Locates the JPEG end-of-file marker in a data array
+///
+/// It appears that the Arducam Mega over-reports the size of the FIFO buffer length. This means
+/// that in some cases, you can end up with a bunch of `0x00` bytes at the end of your JPEG file.
+/// This function can be used to detect the end-of-file marker in the JPEG data and thus trim the
+/// file. This function would typically be used after retrieving data using
+/// [`read_fifo_full`](ArducamMega::read_fifo_full).
+///
+/// # Examples
+///
+/// ```
+/// use arducam_mega::find_jpeg_eof;
+///
+/// //                                  v- extra bytes
+/// let data = [0xff, 0xff, 0xff, 0xd9, 0x00, 0x00, 0x00];
+/// //                      ^- end of file marker
+///
+/// let eof = find_jpeg_eof(&data).unwrap();
+/// assert_eq!(data[..eof].len(), 4);
+/// ```
+pub fn find_jpeg_eof(data: &[u8]) -> Option<usize> {
+    data.windows(2)
+        .enumerate()
+        .filter_map(|(i, p)| match p {
+            [0xff, 0xd9] => Some(i + 2),
+            _ => None,
+        })
+        .last()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -694,6 +723,26 @@ mod tests {
         delay,
         spi::{self, Transaction},
     };
+
+    #[test]
+    fn find_jpeg_eof_finds_first_byte() {
+        assert_eq!(find_jpeg_eof(&[0xff, 0xd9]).unwrap(), 2);
+    }
+
+    #[test]
+    fn find_jpeg_eof_finds_not_2_aligned_byte() {
+        assert_eq!(find_jpeg_eof(&[0x00, 0xff, 0xd9]).unwrap(), 3);
+    }
+
+    #[test]
+    fn find_jpeg_eof_returns_last_match() {
+        assert_eq!(find_jpeg_eof(&[0xff, 0xd9, 0xff, 0xd9]).unwrap(), 4);
+    }
+
+    #[test]
+    fn find_jpeg_eof_identifies_missing_tag() {
+        assert!(find_jpeg_eof(&[]).is_none());
+    }
 
     macro_rules! harness {
         ($e:ident, $s:ident, $c:ident) => {
@@ -980,31 +1029,6 @@ mod tests {
         cam.read_fifo_full(&mut buffer).unwrap();
         assert_eq!(buffer[0], 0x33);
         assert_eq!(buffer.iter().map(|i| *i as u32).sum::<u32>(), 113);
-        spi.done();
-    }
-
-    #[test]
-    fn read_fifo_full_detects_eof_jpeg_marker() {
-        let mut buffer = [0; 65];
-        let expectations = [
-            Transaction::transaction_start(),
-            Transaction::transfer(
-                vec![0x3c],
-                vec![
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xff, 0xd9, 0x00, 0x00, 0x00, 0x00,
-                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-                ],
-            ),
-            Transaction::transfer(vec![0x3c], vec![0x00, 0x00]),
-            Transaction::transaction_end(),
-        ];
-        harness!(expectations, spi, cam);
-        let pos = cam.read_fifo_full(&mut buffer).unwrap();
-        assert_eq!(buffer[pos - 2], 0xff);
-        assert_eq!(buffer[pos - 1], 0xd9);
         spi.done();
     }
 
