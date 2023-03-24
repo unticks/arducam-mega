@@ -575,22 +575,26 @@ where
         data: &mut [u8],
     ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
         let length = data.len();
+        let output: [u8; 1] = [FIFO_READ_BURST];
+        let mut buffer: [u8; 65] = [0; 65];
+
+        let mut i = 0;
 
         self.spi
             .transaction(|bus| {
-                let output: [u8; 1] = [FIFO_READ_BURST];
-
-                let mut i = 0;
-                while i <= (length - 63) {
+                // there are more than 63 bytes to be read
+                while i + 63 < length {
                     // Send the read burst command and read 65 bytes
-                    bus.transfer(&mut data[i..i + 65], &output[..])?;
-                    // Ignore the first 2 bytes
-                    data.copy_within(i + 2..i + 65, i);
+                    bus.transfer(&mut buffer, &output)?;
+                    // Copy buffer contents into data array, skipping first two bytes
+                    data[i..i + 63].copy_from_slice(&buffer[2..]);
                     i += 63;
                 }
 
-                bus.transfer(&mut data[i..], &output[..])?;
-                data.copy_within(i + 2.., i);
+                // Send another read burst command and read remaining bytes
+                bus.transfer(&mut buffer[..(length - i) + 2], &output)?;
+                // Copy buffer contents into data array, skipping first two bytes
+                data[i..].copy_from_slice(&buffer[2..(length - i) + 2]);
 
                 Ok(())
             })
@@ -1078,26 +1082,47 @@ mod tests {
 
     #[test]
     fn read_fifo_full_skips_first_two_bytes() {
-        let mut buffer = [0; 65];
+        let mut buffer = [0; 2];
+        let expectations = expect!(send vec![0x3c], receive vec![0x00, 0x00, 0x33, 0x01]);
+        harness!(expectations, spi, cam);
+        cam.read_fifo_full(&mut buffer).unwrap();
+        assert_eq!(buffer, [0x33, 0x01]);
+        spi.done();
+    }
+
+    #[test]
+    fn read_fifo_full_skips_first_two_bytes_on_long_transfers() {
+        let mut buffer = [0; 126];
         let expectations = [
             Transaction::transaction_start(),
-            Transaction::transfer(
-                vec![0x3c],
-                vec![
-                    0x00, 0x00, 0x33, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-                    0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-                    0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-                    0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-                    0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01, 0x01,
-                ],
-            ),
-            Transaction::transfer(vec![0x3c], vec![0x00, 0x00]),
+            Transaction::transfer(vec![0x3c], vec![0x11; 65]),
+            Transaction::transfer(vec![0x3c], vec![0x22; 65]),
             Transaction::transaction_end(),
         ];
         harness!(expectations, spi, cam);
         cam.read_fifo_full(&mut buffer).unwrap();
-        assert_eq!(buffer[0], 0x33);
-        assert_eq!(buffer.iter().map(|i| *i as u32).sum::<u32>(), 113);
+        assert_eq!(
+            buffer.iter().map(|i| *i as u32).sum::<u32>(),
+            63 * 0x11 + 63 * 0x22
+        );
+        spi.done();
+    }
+
+    #[test]
+    fn read_fifo_full_hands_partial_reads() {
+        let mut buffer = [0; 100];
+        let expectations = [
+            Transaction::transaction_start(),
+            Transaction::transfer(vec![0x3c], vec![0x11; 65]),
+            Transaction::transfer(vec![0x3c], vec![0x22; 39]),
+            Transaction::transaction_end(),
+        ];
+        harness!(expectations, spi, cam);
+        cam.read_fifo_full(&mut buffer).unwrap();
+        assert_eq!(
+            buffer.iter().map(|i| *i as u32).sum::<u32>(),
+            63 * 0x11 + 37 * 0x22
+        );
         spi.done();
     }
 
