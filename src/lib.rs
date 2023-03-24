@@ -570,10 +570,14 @@ where
     /// [`find_jpeg_eof()`](find_jpeg_eof) to help trim the data stream.
     ///
     /// This function is not currently tested with other data formats (YUV, RGB).
-    pub fn read_fifo_full(
+    pub fn read_fifo_full<T>(
         &mut self,
-        data: &mut [u8],
-    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>> {
+        data: &mut T,
+    ) -> Result<&mut Self, Error<SPI::Error, Delay::Error>>
+    where
+        T: AsMut<[u8]>,
+    {
+        let data = data.as_mut();
         let length = data.len();
         let output: [u8; 1] = [FIFO_READ_BURST];
         let mut buffer: [u8; 65] = [0; 65];
