@@ -232,8 +232,9 @@ pub enum Format {
 /// The resolution of the image captured by the camera
 ///
 /// `Qvga` and `Vga` are good test values. `Qqvga` is listed in the SDK, however is also not
-/// explicitly added to the camera's supported resolutions. `Qqvga` is therefore listed here but
-/// hasn't been tested.
+/// explicitly added to the camera's supported resolutions. Based on testing with a 5MP camera,
+/// some resolutions have been feature-gated as only working on 3MP as they did not work on 5MP.
+/// However, this hasn't been tested yet.
 ///
 /// If both the `3mp` and `5mp` features are enabled, this enum will have a `Fhd` (1080p) default,
 /// as that is the highest resolution compatible with both cameras. When only the `3mp` feature is
@@ -242,46 +243,56 @@ pub enum Format {
 #[derive(Debug, Clone, Default)]
 #[repr(u8)]
 pub enum Resolution {
-    /// QQVGA resolution (160x120). Untested, and the official Arducam SDK does not list this
-    /// resolution as supported by either the 3MP or 5MP Arducam Mega.
+    #[cfg_attr(docsrs, doc(cfg(feature = "3mp")))]
+    #[cfg(feature = "3mp")]
+    /// QQVGA resolution (160x120). Tested to not work on 5MP. Untested on 3MP.
     Qqvga = 0x00,
-    /// QVGA resolution (320x240). Untested.
+
+    /// QVGA resolution (320x240). Untested on 3MP.
     Qvga = 0x01,
-    /// VGA resolution (640x480). Tested on the Ardumcam Mega 5MP.
+    /// VGA resolution (640x480). Untested on 3MP.
     Vga = 0x02,
-    /// SVGA resolution (800x600). Untested.
+
+    #[cfg_attr(docsrs, doc(cfg(feature = "3mp")))]
+    #[cfg(feature = "3mp")]
+    /// SVGA resolution (800x600). Tested to not work on 5MP. Untested on 3MP.
     Svga = 0x03,
-    /// HD resolution (1280x720). Untested.
+
+    /// HD resolution (1280x720). Untested on 3MP.
     Hd = 0x04,
-    /// SXGAM resolution (1280x960). Untested.
+
+    #[cfg_attr(docsrs, doc(cfg(feature = "3mp")))]
+    #[cfg(feature = "3mp")]
+    /// SXGAM resolution (1280x960). Tested to not work on 5MP. Untested on 3MP.
     Sxgam = 0x05,
-    /// UXGA resolution (1600x1200). Untested.
+
+    /// UXGA resolution (1600x1200). Untested on 3MP.
     Uxga = 0x06,
 
     #[cfg_attr(all(feature = "3mp", feature = "5mp"), default)]
-    /// FHD resolution (1920x1080). Untested. This is the default choice for this enum when both
-    /// the `3mp` and `5mp` features are enabled.
+    /// FHD resolution (1920x1080). This is the default choice for this enum when both the `3mp`
+    /// and `5mp` features are enabled. Untested on 3MP.
     Fhd = 0x07,
 
     #[cfg_attr(docsrs, doc(cfg(feature = "3mp")))]
     #[cfg(feature = "3mp")]
     #[cfg_attr(not(feature = "5mp"), default)]
-    /// QXGA resolution (2048x1536). Untested. This is the default choice for this enum when the
-    /// `3mp` feature (only) is enabled.
+    /// QXGA resolution (2048x1536). This is the default choice for this enum when the `3mp`
+    /// feature (only) is enabled. Untested.
     Qxga = 0x08,
 
     #[cfg_attr(docsrs, doc(cfg(feature = "5mp")))]
     #[cfg(feature = "5mp")]
     #[cfg_attr(not(feature = "3mp"), default)]
-    /// WQXGA2 resolution (2592x1944). Untested. This is the default choice for this enum when the
+    /// WQXGA2 resolution (2592x1944). This is the default choice for this enum when the
     /// `5mp` feature (only) is enabled.
     Wqxga2 = 0x09,
 
-    /// 96x96 resolution. Untested.
+    /// 96x96 resolution. Untested on 3MP.
     Res96x96 = 0x0a,
-    /// 128x128 resolution. Untested.
+    /// 128x128 resolution. Untested on 3MP.
     Res128x128 = 0x0b,
-    /// 320x320 resolution. Untested.
+    /// 320x320 resolution. Untested on 3MP.
     Res320x320 = 0x0c,
 }
 
